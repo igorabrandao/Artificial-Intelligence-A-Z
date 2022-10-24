@@ -1,10 +1,9 @@
-# AI for Autonomous Vehicles - Build a Self-Driving Car
-
-# Building the Environment
+# Self Driving Car
 
 # Importing the libraries
 import numpy as np
 from random import random, randint
+import matplotlib.pyplot as plt
 import time
 
 # Importing the Kivy packages
@@ -16,14 +15,9 @@ from kivy.config import Config
 from kivy.properties import NumericProperty, ReferenceListProperty, ObjectProperty
 from kivy.vector import Vector
 from kivy.clock import Clock
-from kivy.config import Config
 
-# Importing the Dqn object from our AI in deep_q_learning.py
-from deep_q_learning import Dqn
-
-# Set the window size
-Config.set('graphics', 'width', '1200')
-Config.set('graphics', 'height', '800')
+# Importing the Dqn object from our AI in ai.py
+from ai import Dqn
 
 # Adding this line if we don't want the right click to put a red point
 Config.set('input', 'mouse', 'mouse,multitouch_on_demand')
@@ -34,10 +28,11 @@ last_y = 0
 n_points = 0
 length = 0
 
-# Creating the brain of our AI, the list of actions and the reward variable
-brain = Dqn(4,3,0.9)
+# Getting our AI, which we call "brain", and that contains our neural network that represents our Q-function
+brain = Dqn(5,3,0.9)
 action2rotation = [0,20,-20]
-reward = 0
+last_reward = 0
+scores = []
 
 # Initializing the map
 first_update = True
@@ -51,7 +46,7 @@ def init():
     goal_y = largeur - 20
     first_update = False
 
-# Initializing the last distance from the car to the goal
+# Initializing the last distance
 last_distance = 0
 
 # Creating the car class
@@ -116,7 +111,8 @@ class Game(Widget):
     def update(self, dt):
 
         global brain
-        global reward
+        global last_reward
+        global scores
         global last_distance
         global goal_x
         global goal_y
@@ -131,8 +127,9 @@ class Game(Widget):
         xx = goal_x - self.car.x
         yy = goal_y - self.car.y
         orientation = Vector(*self.car.velocity).angle((xx,yy))/180.
-        state = [orientation, self.car.signal1, self.car.signal2, self.car.signal3]
-        action = brain.update(state, reward)
+        last_signal = [self.car.signal1, self.car.signal2, self.car.signal3, orientation, -orientation]
+        action = brain.update(last_reward, last_signal)
+        scores.append(brain.score())
         rotation = action2rotation[action]
         self.car.move(rotation)
         distance = np.sqrt((self.car.x - goal_x)**2 + (self.car.y - goal_y)**2)
@@ -142,30 +139,29 @@ class Game(Widget):
 
         if sand[int(self.car.x),int(self.car.y)] > 0:
             self.car.velocity = Vector(1, 0).rotate(self.car.angle)
-            reward = -1
-        else:
+            last_reward = -1
+        else: # otherwise
             self.car.velocity = Vector(6, 0).rotate(self.car.angle)
-            reward = -0.2
+            last_reward = -0.2
             if distance < last_distance:
-                reward = 0.1
+                last_reward = 0.1
 
         if self.car.x < 10:
             self.car.x = 10
-            reward = -1
+            last_reward = -1
         if self.car.x > self.width - 10:
             self.car.x = self.width - 10
-            reward = -1
+            last_reward = -1
         if self.car.y < 10:
             self.car.y = 10
-            reward = -1
+            last_reward = -1
         if self.car.y > self.height - 10:
             self.car.y = self.height - 10
-            reward = -1
+            last_reward = -1
 
         if distance < 100:
             goal_x = self.width-goal_x
             goal_y = self.height-goal_y
-
         last_distance = distance
 
 # Adding the painting tools
@@ -227,6 +223,8 @@ class CarApp(App):
     def save(self, obj):
         print("saving brain...")
         brain.save()
+        plt.plot(scores)
+        plt.show()
 
     def load(self, obj):
         print("loading last saved brain...")
